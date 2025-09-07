@@ -7,6 +7,7 @@ import cookieParser from 'cookie-parser';
 import authRoutes from './routes/authRoutes.js';
 import path from 'path';
 import fs from "fs";
+import { fileURLToPath } from "url";
 
 dotenv.config();
 
