@@ -37,22 +37,15 @@ if (!fs.existsSync("./uploads")) {
   fs.mkdirSync("./uploads", { recursive: true });
 }
 
-if(process.env.NODE_ENV === "production") {
-    console.log("Setting up production static files...");
-    try {
-        app.use(express.static(path.join(__dirname, "../frontend/dist")));
-        console.log("✅ Static files configured");
-        
-        // Use a more specific pattern for SPA routing
-        app.get(/^(?!\/api).*/, (req, res) => {
-            res.sendFile(path.join(__dirname, "../frontend", "dist", "index.html"));
-        });
-        console.log("✅ SPA routing configured");
-    } catch (error) {
-        console.error("❌ Error setting up production routes:", error.message);
-    }
+if (process.env.NODE_ENV === "production") {
+  const frontendDist = path.join(__dirname, "../../frontend/dist"); 
+  app.use(express.static(frontendDist));
+
+  app.get(/^(?!\/api).*/, (req, res) => {
+    res.sendFile(path.join(frontendDist, "index.html"));
+  });
 } else {
-    console.log("Running in development mode");
+  console.log("Running in development mode");
 }
 
 await connectDB()
