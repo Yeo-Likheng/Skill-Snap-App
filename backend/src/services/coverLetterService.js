@@ -1,16 +1,50 @@
-import fetch from "node-fetch";
 import fs from "fs";
 import path from "path";
 import { extractResumeData } from "./documentQAService.js";
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
-// Function to parse candidate information from extracted text using AI
-async function parseCandidateInfo(extractedText, existingData = null) {
+// Helper function to call OpenRouter API
+async function callOpenRouter(prompt) {
   if (!OPENROUTER_API_KEY) {
     throw new Error("Missing OPENROUTER_API_KEY in environment variables");
   }
 
+  try {
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": "http://localhost:5006",
+        "X-Title": "SkillSnap Resume App"
+      },
+      body: JSON.stringify({
+        model: "openrouter/aurora-alpha",
+        messages: [
+          {
+            role: "user",
+            content: prompt
+          }
+        ]
+      })
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`OpenRouter API Error: ${response.status} - ${errText}`);
+    }
+
+    const data = await response.json();
+    return data.choices?.[0]?.message?.content || "";
+  } catch (error) {
+    console.error("OpenRouter API Error:", error);
+    throw error;
+  }
+}
+
+// Function to parse candidate information from extracted text using AI
+async function parseCandidateInfo(extractedText, existingData = null) {
   // If we have structured data from your extractor, use it as a starting point
   let baseInfo = {
     name: "N/A",
@@ -56,32 +90,7 @@ async function parseCandidateInfo(extractedText, existingData = null) {
   Do not include any explanatory text, only the JSON object.
   `;
 
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": "http://localhost:5006",
-      "X-Title": "SkillSnap Resume App"
-    },
-    body: JSON.stringify({
-      model: "mistralai/mistral-7b-instruct:free",
-      messages: [
-        {
-          role: "user",
-          content: parsePrompt
-        }
-      ]
-    })
-  });
-
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`OpenRouter API Error: ${response.status} - ${errText}`);
-  }
-
-  const data = await response.json();
-  const content = data.choices?.[0]?.message?.content || "{}";
+  const content = await callOpenRouter(parsePrompt);
   
   try {
     // Clean the response and extract JSON
@@ -171,35 +180,12 @@ export async function generateCoverLetter(resumeFile, jobDescription, originalFi
     - Do not use double newlines (\n\n). Use single line breaks if needed.
     `;
 
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": "http://localhost:5006",
-        "X-Title": "SkillSnap Resume App"
-      },
-      body: JSON.stringify({
-        model: "mistralai/mistral-7b-instruct:free", 
-        messages: [
-          {
-            role: "user",
-            content: prompt
-          }
-        ]
-      })
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(`OpenRouter API Error: ${response.status} - ${errText}`);
-    }
-
-    const data = await response.json();
-    const rawCoverLetter = data.choices?.[0]?.message?.content || "Error: No cover letter generated.";
+    const rawCoverLetter = await callOpenRouter(prompt);
+    
     const cleanedCoverLetter = rawCoverLetter
       .replace(/\n{2,}/g, "\n")  // turn double newlines into single
       .trim();
+
     return {
       coverLetter: cleanedCoverLetter || "Error: No cover letter generated.",
       candidateInfo: candidateInfo,
